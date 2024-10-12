@@ -1,25 +1,32 @@
 #!/usr/bin/env python3
 
-import subprocess
 from pathlib import Path
 import git
 import shutil
-def clone_indi_repo(repo_url, destination_path):
-    """Clone the indi-3rdparty repo if it's not already cloned.
-        Args: 
-            repo_url (str): URL of the repository.
-            destination_path (Path): Path to clone the repository.
-        """
-    if not destination_path.exists():
-        print(f"Cloning {repo_url} into {destination_path}...")
-        try:
-            subprocess.run(['git', 'clone', repo_url, str(destination_path)], check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to clone repository: {e}")
-            return False
-    else:
-        print(f"{destination_path} already exists. Skipping cloning.")
-    return True
+
+def clone_or_update_repo(repo_url, destination_path):
+    """
+    Clone the repo if it's not already cloned, or perform a git pull if it already exists.
+    
+    Args:
+        repo_url (str): URL of the repository.
+        destination_path (Path): Path to clone the repository.
+    
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    try:
+        if not destination_path.exists():
+            # Clone the repository if it doesn't exist
+            git.Repo.clone_from(repo_url, destination_path)
+        else:
+            repo = git.Repo(destination_path)
+            origin = repo.remotes.origin
+            origin.pull()
+        return True
+    except Exception as e:
+        print(f"Failed to clone or update repository: {e}")
+        return False
 
 # Function to check if git is installed
 def check_git_installed():
@@ -82,19 +89,22 @@ if __name__ == "__main__":
         repo_path = Path.home() / 'indi-3rdparty'
         
         # Clone the repository if it doesn't exist
-        if clone_indi_repo(repo_url, repo_path):
+        if clone_or_update_repo(repo_url, repo_path):
             drivers_directory_path = repo_path
             
             # List drivers
             drivers_list = list_drivers(drivers_directory_path)
 
+            # Print header
+            print(f"{'Driver':<25} | {'Version':<10} | {'Git Hash'}")
+            print("-" * 60)
+
             if drivers_list:
-                print("Drivers found in the repository:")
                 for driver in drivers_list:
                     # Get the changelog path for each driver
                     changelog_path = drivers_directory_path / 'debian' / driver / 'changelog'
                     version = extract_version_from_changelog(changelog_path)
                     git_hash = get_git_hash(repo_path, driver)
-                    print(f"{driver}: {version} | {git_hash}")
+                    print(f"{driver:<25} | {version:<10} | {git_hash}")
             else:
                 print("No drivers found or an error occurred.")
