@@ -198,17 +198,26 @@ if __name__ == "__main__":
 
                 # Get common drivers
                 common_drivers = get_common_drivers(drivers_list, debian_drivers)
-
-                # Print header
-                print(f"{'Driver':<25} | {'Version':<10} | {'Git Hash'}")
-                print("-" * 60)
                 
+                driver_results = {}
 
                 # Get the driver version
                 for driver in common_drivers:
                     debian_version = get_debian_version(driver)
                     debian_git_hash = process_package(driver)
-                    print(f"{driver:<25} | {debian_version:<10} | {debian_git_hash}")
+
+                                        # Save results in dictionary
+                    driver_results[driver] = {
+                        'version': debian_version,
+                        'git_hash': debian_git_hash
+                    }
+
+                # Print header
+                print(f"{'Driver':<25} | {'Version':<10} | {'Git Hash'}")
+                print("-" * 60)
+
+                for driver, details in driver_results.items():
+                    print(f"{driver:<25} | {details['version']:<10} | {details['git_hash']}")
             else:
                 print("Please install apt-cache to proceed.")
 
