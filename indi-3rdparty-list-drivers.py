@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
-import git
 import shutil
+try:
+    import git
+except ModuleNotFoundError:
+    print("Error: The 'gitPython' module is not installed. Please install it by running 'pip install gitPython'.")
+    exit(1)
 
+repo_url = 'https://github.com/indilib/indi-3rdparty.git'
+repo_path = Path.home() / 'indi-3rdparty'
+
+# Function to clone or update the repository
 def clone_or_update_repo(repo_url, destination_path):
     """
     Clone the repo if it's not already cloned, or perform a git pull if it already exists.
@@ -15,18 +23,28 @@ def clone_or_update_repo(repo_url, destination_path):
     Returns:
         bool: True if successful, False otherwise.
     """
+    destination_path = Path(destination_path)
+    print(f"Resolved destination path: {destination_path}")
+
     try:
         if not destination_path.exists():
             # Clone the repository if it doesn't exist
+            print(f"Cloning {repo_url} into {destination_path}. This may take a few moments...")
             git.Repo.clone_from(repo_url, destination_path)
+            print(f"Successfully cloned the repository into {destination_path}.")
         else:
+            # Perform a git pull if the repository already exists
+            print(f"Updating the repository at {destination_path}...")
             repo = git.Repo(destination_path)
             origin = repo.remotes.origin
             origin.pull()
+            print(f"Repository at {destination_path} is now up to date.")
+        
         return True
     except Exception as e:
-        print(f"Failed to clone or update repository: {e}")
+        print(f"Failed to clone or update the repository: {e}")
         return False
+
 
 # Function to check if git is installed
 def check_git_installed():
@@ -80,13 +98,9 @@ def get_git_hash(repo_path, driver_path):
         return "Git hash not found"
 
 
-repo_url = 'https://github.com/indilib/indi-3rdparty.git'
-repo_path = Path.home() / 'indi-3rdparty'
 
 if __name__ == "__main__":
     if check_git_installed():
-        repo_url = 'https://github.com/indilib/indi-3rdparty.git'
-        repo_path = Path.home() / 'indi-3rdparty'
         
         # Clone the repository if it doesn't exist
         if clone_or_update_repo(repo_url, repo_path):
