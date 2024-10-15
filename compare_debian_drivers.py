@@ -2,9 +2,16 @@
 
 import subprocess
 from pathlib import Path
-import git
 import shutil
 import re
+try:
+    import git
+except ModuleNotFoundError:
+    print("Error: The 'gitPython' module is not installed. Please install it by running 'pip install gitPython'.")
+    exit(1)
+
+repo_url = 'https://github.com/indilib/indi-3rdparty.git'
+repo_path = Path.home() / 'indi-3rdparty'
 
 def check_apt_cache_installed():
     """Check if apt-cache is available on the system."""
@@ -24,20 +31,26 @@ def clone_or_update_repo(repo_url, destination_path):
     Returns:
         bool: True if successful, False otherwise.
     """
+    destination_path = Path(destination_path)
+    print(f"Resolved destination path: {destination_path}")
+
     try:
         if not destination_path.exists():
             # Clone the repository if it doesn't exist
-            print(f"Cloning {repo_url} into {destination_path}...")
+            print(f"Cloning {repo_url} into {destination_path}. This may take a few moments...")
             git.Repo.clone_from(repo_url, destination_path)
+            print(f"Successfully cloned the repository into {destination_path}.")
         else:
             # Perform a git pull if the repository already exists
+            print(f"Updating the repository at {destination_path}...")
             repo = git.Repo(destination_path)
             origin = repo.remotes.origin
             origin.pull()
-            
+            print(f"Repository at {destination_path} is now up to date.")
+        
         return True
     except Exception as e:
-        print(f"Failed to clone or update repository: {e}")
+        print(f"Failed to clone or update the repository: {e}")
         return False
 
 # Function to check if git is installed
@@ -168,8 +181,7 @@ def process_package(package_name):
         print(f"Failed to process {package_name}")
 
 
-repo_url = 'https://github.com/indilib/indi-3rdparty.git'
-repo_path = Path.home() / 'indi-3rdparty'
+
 
 if __name__ == "__main__":
     if check_git_installed():
