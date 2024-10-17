@@ -5,7 +5,7 @@ import shutil
 try:
     import git
 except ModuleNotFoundError:
-    print("Error: The 'gitPython' module is not installed. Please install it by running 'pip install gitPython'.")
+    print("Error: The 'gitPython' module is not installed. Please install it using 'apt install python3-git'.")
     exit(1)
 
 repo_url = 'https://github.com/indilib/indi-3rdparty.git'
@@ -60,7 +60,7 @@ def list_drivers(drivers_directory_path):
         Args: drivers_directory_path (Path): Path to the drivers directory.
     """
     try:
-        drivers = [item.name for item in drivers_directory_path.iterdir() if item.is_dir() and item.name.startswith("indi-")]
+        drivers = [item.name for item in drivers_directory_path.iterdir() if item.is_dir() and item.name.startswith("indi-") or item.name.startswith("lib")]
         return drivers
     except Exception as e:
         print(f"Error occurred while listing drivers: {e}")
@@ -97,7 +97,28 @@ def get_git_hash(repo_path, driver_path):
         print(f"Error fetching git hash for {driver_path}: {e}")
         return "Git hash not found"
 
-
+def calculate_version_from_git_hash(repo_path, driver):
+    """
+    Calculate the version of the package based on the Git commit date and hash, and return both.
+    
+    Args:
+        repo_path (Path): Path to the repository.
+        driver (str): Name of the driver.
+    
+    Returns:
+        tuple: The calculated version and the Git hash, or 'Version not found'.
+    """
+    try:
+        repo = git.Repo(repo_path)
+        commit = next(repo.iter_commits(paths=driver, max_count=1))
+        commit_date = commit.committed_datetime.strftime('%Y%m%d')
+        git_hash = commit.hexsha
+        version = f"1.0~git{commit_date}.{git_hash[:8]}"  # You can adjust the version format if needed
+        return version, git_hash
+    except Exception as e:
+        print(f"Error calculating version for {driver}: {e}")
+        return "Version not found", "Git hash not found"
+    
 
 if __name__ == "__main__":
     if check_git_installed():
@@ -118,7 +139,14 @@ if __name__ == "__main__":
                     # Get the changelog path for each driver
                     changelog_path = drivers_directory_path / 'debian' / driver / 'changelog'
                     version = extract_version_from_changelog(changelog_path)
-                    git_hash = get_git_hash(repo_path, driver)
-                    print(f"{driver:<25} | {version:<10} | {git_hash}")
+                  # If version not found in changelog, calculate from Git hash and commit date
+                    if version == "Version not found":
+                        version, git_hash = calculate_version_from_git_hash(repo_path, driver)
+                    else:
+                        # Get the Git hash if version is found in the changelog
+                        git_hash = get_git_hash(repo_path, driver)
+                    
+                    print(f"{driver:<25} | {version:<20} | {git_hash}")
+            
             else:
                 print("No drivers found or an error occurred.")
