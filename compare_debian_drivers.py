@@ -83,7 +83,8 @@ def get_debian_drivers():
     try:
         result = subprocess.run(['apt-cache', 'search', 'indi-'], stdout=subprocess.PIPE, text=True, check=True)
         # Filter lines that start with 'indi-' to get package names
-        packages = [line.split()[0] for line in result.stdout.splitlines() if line.startswith('indi-')]
+        packages = [line.split()[0] for line in result.stdout.splitlines() if line.startswith('indi-') or line.startswith('lib')]
+        print('packages:', packages)
         return packages
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while fetching Debian drivers: {e}")
@@ -136,6 +137,26 @@ def get_debian_version(package_name):
         print(f"Error occurred while fetching version for {package_name}: {e}")
         return "Version not found"
 
+def extract_version_from_changelog(changelog_path):
+    """
+    Extract the driver version from the changelog file.
+    Args:
+        changelog_path (Path): Path to the changelog file.
+    Returns:
+        str: Extracted version, or 'Version not found'.
+    """
+    if changelog_path.exists():
+        try:
+            with changelog_path.open() as changelog_file:
+                # The version is typically found in the first line in parentheses
+                first_line = changelog_file.readline().strip()
+                if first_line:
+                    version = first_line.split()[1].strip("()")
+                    return version
+        except Exception as e:
+            print(f"Error reading version from {changelog_path}: {e}")
+    return "Version not found"
+
 def get_salsa_repo_url(package_name):
     """
     Construct a potential Salsa repository URL based on the package name.
@@ -165,6 +186,10 @@ def get_latest_git_hash(repo_path):
         return "Git hash not found"
 
 def process_package(package_name):
+
+    # get debain version
+    debian_version = get_debian_version(package_name)
+
     # Step 1: Construct the Git URL
     repo_url = get_salsa_repo_url(package_name)
     
@@ -175,12 +200,69 @@ def process_package(package_name):
     if clone_or_update_repo(repo_url, repo_path):
         
         # Step 4: Get the latest Git hash
-        git_hash = get_latest_git_hash(repo_path)
-        return git_hash
+        
+        if debian_version == 'Version not found':
+            version, git_hash = calculate_version_from_git_hash(repo_path)
+            return version, git_hash
+        else:
+            git_hash = get_latest_git_hash(repo_path)
+            return debian_version, git_hash
     else:
         print(f"Failed to process {package_name}")
 
+def handle_soname_versions(packages):
+    """Handle soname versioning by keeping only the latest version of each package."""
+    package_dict = {}
 
+    for package in packages:
+        # Extract base name and possible soname version
+        base_name, _, version_suffix = package.rpartition('-')
+        if not version_suffix.isdigit():  # If no version suffix, keep the package name as is
+            base_name = package
+
+        # If we already have a versioned package, keep the latest (e.g., libapogee vs libapogee3)
+        if base_name in package_dict:
+            current_version = package_dict[base_name]
+            # Compare versions, and keep the one with the higher version (e.g., libapogee3 > libapogee)
+            if version_suffix.isdigit() and int(version_suffix) > int(current_version.rpartition('-')[-1]):
+                package_dict[base_name] = package
+        else:
+            package_dict[base_name] = package
+    
+    # Return only the latest versions of each package
+    return list(package_dict.values())
+
+def calculate_version_from_git_hash(repo_path):
+    """
+    Calculate the version of the package based on the latest Git commit date and hash for the entire repository.
+    
+    Args:
+        repo_path (Path): Path to the repository.
+        driver (str): Not used in this context, we fetch the latest commit from the entire repository.
+    
+    Returns:
+        tuple: The calculated version and the Git hash, or 'Version not found'.
+    """
+    try:
+        repo = git.Repo(repo_path)
+
+        # Getting the latest commit for the entire repository
+        commit = next(repo.iter_commits(max_count=1))
+        
+        # Extracting the commit date and hash
+        commit_date = commit.committed_datetime.strftime('%Y%m%d')
+        git_hash = commit.hexsha
+
+        base_version = extract_version_from_changelog(repo_path / 'debian' / 'changelog')
+        if base_version == "Version not found":
+            base_version = "1.0"
+        
+        version = f"{base_version}+git{commit_date}.{git_hash[:7]}"
+        
+        return version, git_hash
+    except Exception as e:
+        print(f"Error calculating version for the repository: {e}")
+        return "Version not found", "Git hash not found"
 
 
 if __name__ == "__main__":
@@ -196,6 +278,9 @@ if __name__ == "__main__":
                 # list debian drivers
                 debian_drivers = get_debian_drivers()
 
+                # Handle soname versions
+                debian_drivers = handle_soname_versions(debian_drivers)
+
                 # Get common drivers
                 common_drivers = get_common_drivers(drivers_list, debian_drivers)
                 
@@ -203,8 +288,8 @@ if __name__ == "__main__":
 
                 # Get the driver version
                 for driver in common_drivers:
-                    debian_version = get_debian_version(driver)
-                    debian_git_hash = process_package(driver)
+                    # debian_version = get_debian_version(driver)
+                    debian_version, debian_git_hash = process_package(driver)
 
                                         # Save results in dictionary
                     driver_results[driver] = {
@@ -220,4 +305,3 @@ if __name__ == "__main__":
                     print(f"{driver:<25} | {details['version']:<10} | {details['git_hash']}")
             else:
                 print("Please install apt-cache to proceed.")
-
