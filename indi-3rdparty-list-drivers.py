@@ -97,27 +97,38 @@ def get_git_hash(repo_path, driver_path):
         print(f"Error fetching git hash for {driver_path}: {e}")
         return "Git hash not found"
 
-def calculate_version_from_git_hash(repo_path, driver):
+def calculate_version_from_git_hash(repo_path):
     """
-    Calculate the version of the package based on the Git commit date and hash, and return both.
+    Calculate the version of the package based on the latest Git commit date and hash for the entire repository.
     
     Args:
         repo_path (Path): Path to the repository.
-        driver (str): Name of the driver.
+        driver (str): Not used in this context, we fetch the latest commit from the entire repository.
     
     Returns:
         tuple: The calculated version and the Git hash, or 'Version not found'.
     """
     try:
         repo = git.Repo(repo_path)
-        commit = next(repo.iter_commits(paths=driver, max_count=1))
+
+        # Getting the latest commit for the entire repository
+        commit = next(repo.iter_commits(max_count=1))
+        
+        # Extracting the commit date and hash
         commit_date = commit.committed_datetime.strftime('%Y%m%d')
         git_hash = commit.hexsha
-        version = f"1.0~git{commit_date}.{git_hash[:8]}"  # You can adjust the version format if needed
+
+        base_version = extract_version_from_changelog(repo_path / 'debian' / 'changelog')
+        if base_version == "Version not found":
+            base_version = "1.0"
+        
+        version = f"{base_version}+git{commit_date}.{git_hash[:7]}"
+        
         return version, git_hash
     except Exception as e:
-        print(f"Error calculating version for {driver}: {e}")
+        print(f"Error calculating version for the repository: {e}")
         return "Version not found", "Git hash not found"
+
     
 
 if __name__ == "__main__":
@@ -141,7 +152,7 @@ if __name__ == "__main__":
                     version = extract_version_from_changelog(changelog_path)
                   # If version not found in changelog, calculate from Git hash and commit date
                     if version == "Version not found":
-                        version, git_hash = calculate_version_from_git_hash(repo_path, driver)
+                        version, git_hash = calculate_version_from_git_hash(repo_path)
                     else:
                         # Get the Git hash if version is found in the changelog
                         git_hash = get_git_hash(repo_path, driver)
