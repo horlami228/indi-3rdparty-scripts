@@ -11,7 +11,7 @@ repo_url = 'https://github.com/indilib/indi-3rdparty.git'
 repo_path = Path.home() / 'indi-3rdparty'
 
 # List of manually defined packages to ignore
-ignored_packages = ["libapogee", "libindi-dev", "some_other_package"]  # Add any package to ignore
+ignored_packages = ["libapogee", "libindi-dev", "some_other_package"]
 
 def clone_or_update_repo(repo_url, destination_path):
     """Clone the repo if it's not already cloned, or perform a git pull if it already exists."""
